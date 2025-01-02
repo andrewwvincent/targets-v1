@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Target Management Board</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #f0f2f5;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        .board-container {
+            width: 100%;
+            overflow-x: auto;
+            padding-bottom: 20px;
+            position: absolute;
+            top: 80px; /* Space for header */
+            bottom: 20px;
+            left: 0;
+            right: 0;
+        }
+
+        .board {
+            display: inline-flex;
+            gap: 20px;
+            padding: 0 20px;
+            min-width: max-content;
+        }
+
+        .column {
+            flex: 0 0 300px;
+            background: #f4f4f4;
+            border-radius: 3px;
+            padding: 10px;
+            max-height: 100%;
+            overflow-y: auto;
+        }
+
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background: #f0f2f5;
+            padding: 20px;
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .export-btn, .import-btn {
+            padding: 8px 16px;
+            background: #2196F3;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .export-btn:hover, .import-btn:hover {
+            background: #1976D2;
+        }
+
+        #fileInput {
+            display: none;
+        }
+
+        .column-header {
+            padding: 10px;
+            font-weight: bold;
+            border-radius: 3px;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            color: white;
+            position: relative;
+        }
+
+        /* Column header colors */
+        #not-contacted .column-header {
+            background: #607d8b; /* Blue grey */
+        }
+
+        #initial-contact .column-header {
+            background: #ff9800; /* Orange */
+        }
+
+        #in-discussion .column-header {
+            background: #2196f3; /* Blue */
+        }
+
+        #partnership-agreed .column-header {
+            background: #4caf50; /* Light green */
+        }
+
+        #partnership-active .column-header {
+            background: #2e7d32; /* Dark green */
+        }
+
+        #not-interested .column-header {
+            background: #f44336; /* Red */
+        }
+
+        .column-count {
+            background: rgba(255, 255, 255, 0.2);
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.9em;
+        }
+
+        .card {
+            background: white;
+            padding: 10px;
+            border-radius: 3px;
+            margin-bottom: 10px;
+            cursor: pointer;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.12);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            overflow: hidden;
+        }
+
+        .card-info {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.3s ease-out;
+            opacity: 0;
+        }
+
+        .card.expanded .card-info {
+            max-height: 200px;
+            opacity: 1;
+            transition: max-height 0.3s ease-in, opacity 0.3s ease-in;
+        }
+
+        .card.dragging {
+            opacity: 0.5;
+            transform: scale(0.98);
+        }
+
+        .card-placeholder {
+            background: #e3f2fd;
+            border: 2px dashed #2196F3;
+            border-radius: 3px;
+            margin: 5px 0;
+            height: 4px;
+            transition: all 0.2s ease;
+        }
+
+        .card-placeholder.active {
+            height: 20px;
+            margin: 10px 0;
+        }
+
+        .card:hover {
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        .card-title {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .card-info div {
+            margin-bottom: 4px;
+        }
+
+        .card-info a {
+            color: #2196F3;
+            text-decoration: none;
+        }
+
+        .card-info a:hover {
+            text-decoration: underline;
+        }
+
+        .card-drop-target {
+            height: 2px;
+            background-color: #2196F3;
+            margin: 0;
+            opacity: 0;
+            transition: all 0.2s ease;
+        }
+
+        .card-drop-target.active {
+            height: 20px;
+            opacity: 0.5;
+            margin: 10px 0;
+        }
+
+        .sort-button {
+            cursor: pointer;
+            padding: 5px;
+            margin-left: 8px;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+
+        .sort-menu {
+            position: absolute;
+            top: 100%;
+            right: 0;
+            background: white;
+            border-radius: 4px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+            padding: 8px;
+            display: none;
+            z-index: 1000;
+            min-width: 150px;
+        }
+
+        .sort-menu.active {
+            display: block;
+        }
+
+        .sort-option {
+            display: flex;
+            align-items: center;
+            padding: 8px;
+            cursor: pointer;
+            color: #333;
+            border-radius: 4px;
+        }
+
+        .sort-option:hover {
+            background: #f0f0f0;
+        }
+
+        .sort-option i {
+            margin-left: 8px;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Target Management Board</h1>
+        <div class="header-buttons">
+            <button class="import-btn" onclick="document.getElementById('fileInput').click()">Import from CSV</button>
+            <button class="export-btn" onclick="exportToCSV()">Export to CSV</button>
+            <input type="file" id="fileInput" accept=".csv" onchange="importFromCSV(event)" />
+        </div>
+    </div>
+
+    <div class="board-container">
+        <div class="board">
+            <div class="column" id="not-contacted" ondrop="drop(event)" ondragover="allowDrop(event)">
+                <div class="column-header">
+                    <span>Not Contacted</span>
+                    <div style="display: flex; align-items: center;">
+                        <span class="column-count">0</span>
+                        <div class="sort-button" onclick="toggleSortMenu('not-contacted')">↕</div>
+                        <div class="sort-menu" id="sort-menu-not-contacted">
+                            <div class="sort-option" onclick="sortColumn('not-contacted', 'name', 'asc')">
+                                Name ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('not-contacted', 'name', 'desc')">
+                                Name ↑
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('not-contacted', 'population', 'asc')">
+                                Population ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('not-contacted', 'population', 'desc')">
+                                Population ↑
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('not-contacted', 'income', 'asc')">
+                                Income ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('not-contacted', 'income', 'desc')">
+                                Income ↑
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="column" id="initial-contact" ondrop="drop(event)" ondragover="allowDrop(event)">
+                <div class="column-header">
+                    <span>Initial Contact</span>
+                    <div style="display: flex; align-items: center;">
+                        <span class="column-count">0</span>
+                        <div class="sort-button" onclick="toggleSortMenu('initial-contact')">↕</div>
+                        <div class="sort-menu" id="sort-menu-initial-contact">
+                            <div class="sort-option" onclick="sortColumn('initial-contact', 'name', 'asc')">
+                                Name ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('initial-contact', 'name', 'desc')">
+                                Name ↑
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('initial-contact', 'population', 'asc')">
+                                Population ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('initial-contact', 'population', 'desc')">
+                                Population ↑
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('initial-contact', 'income', 'asc')">
+                                Income ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('initial-contact', 'income', 'desc')">
+                                Income ↑
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="column" id="in-discussion" ondrop="drop(event)" ondragover="allowDrop(event)">
+                <div class="column-header">
+                    <span>In Discussion</span>
+                    <div style="display: flex; align-items: center;">
+                        <span class="column-count">0</span>
+                        <div class="sort-button" onclick="toggleSortMenu('in-discussion')">↕</div>
+                        <div class="sort-menu" id="sort-menu-in-discussion">
+                            <div class="sort-option" onclick="sortColumn('in-discussion', 'name', 'asc')">
+                                Name ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('in-discussion', 'name', 'desc')">
+                                Name ↑
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('in-discussion', 'population', 'asc')">
+                                Population ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('in-discussion', 'population', 'desc')">
+                                Population ↑
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('in-discussion', 'income', 'asc')">
+                                Income ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('in-discussion', 'income', 'desc')">
+                                Income ↑
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="column" id="partnership-agreed" ondrop="drop(event)" ondragover="allowDrop(event)">
+                <div class="column-header">
+                    <span>Partnership Agreed</span>
+                    <div style="display: flex; align-items: center;">
+                        <span class="column-count">0</span>
+                        <div class="sort-button" onclick="toggleSortMenu('partnership-agreed')">↕</div>
+                        <div class="sort-menu" id="sort-menu-partnership-agreed">
+                            <div class="sort-option" onclick="sortColumn('partnership-agreed', 'name', 'asc')">
+                                Name ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('partnership-agreed', 'name', 'desc')">
+                                Name ↑
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('partnership-agreed', 'population', 'asc')">
+                                Population ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('partnership-agreed', 'population', 'desc')">
+                                Population ↑
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('partnership-agreed', 'income', 'asc')">
+                                Income ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('partnership-agreed', 'income', 'desc')">
+                                Income ↑
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="column" id="partnership-active" ondrop="drop(event)" ondragover="allowDrop(event)">
+                <div class="column-header">
+                    <span>Partnership Active</span>
+                    <div style="display: flex; align-items: center;">
+                        <span class="column-count">0</span>
+                        <div class="sort-button" onclick="toggleSortMenu('partnership-active')">↕</div>
+                        <div class="sort-menu" id="sort-menu-partnership-active">
+                            <div class="sort-option" onclick="sortColumn('partnership-active', 'name', 'asc')">
+                                Name ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('partnership-active', 'name', 'desc')">
+                                Name ↑
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('partnership-active', 'population', 'asc')">
+                                Population ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('partnership-active', 'population', 'desc')">
+                                Population ↑
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('partnership-active', 'income', 'asc')">
+                                Income ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('partnership-active', 'income', 'desc')">
+                                Income ↑
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="column" id="not-interested" ondrop="drop(event)" ondragover="allowDrop(event)">
+                <div class="column-header">
+                    <span>Not Interested</span>
+                    <div style="display: flex; align-items: center;">
+                        <span class="column-count">0</span>
+                        <div class="sort-button" onclick="toggleSortMenu('not-interested')">↕</div>
+                        <div class="sort-menu" id="sort-menu-not-interested">
+                            <div class="sort-option" onclick="sortColumn('not-interested', 'name', 'asc')">
+                                Name ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('not-interested', 'name', 'desc')">
+                                Name ↑
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('not-interested', 'population', 'asc')">
+                                Population ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('not-interested', 'population', 'desc')">
+                                Population ↑
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('not-interested', 'income', 'asc')">
+                                Income ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('not-interested', 'income', 'desc')">
+                                Income ↑
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load initial data
+        window.onload = function() {
+            loadTargetsFromCSV();
+        };
+
+        let autoScrollInterval = null;
+
+        function startAutoScroll(direction, container) {
+            if (autoScrollInterval) return; // Don't start if already scrolling
+            
+            const scrollSpeed = 10;
+            let lastTimestamp = null;
+            
+            function autoScroll(timestamp) {
+                if (!lastTimestamp) lastTimestamp = timestamp;
+                const elapsed = timestamp - lastTimestamp;
+                
+                if (elapsed > 16) { // Aim for 60fps
+                    container.scrollLeft += direction * scrollSpeed;
+                    lastTimestamp = timestamp;
+                }
+                
+                autoScrollInterval = requestAnimationFrame(autoScroll);
+            }
+            
+            autoScrollInterval = requestAnimationFrame(autoScroll);
+        }
+
+        function stopAutoScroll() {
+            if (autoScrollInterval) {
+                cancelAnimationFrame(autoScrollInterval);
+                autoScrollInterval = null;
+            }
+        }
+
+        function allowDrop(ev) {
+            ev.preventDefault();
+            const targetCard = ev.target.closest('.card');
+            const dropZone = ev.target.closest('.column');
+            const container = document.querySelector('.board-container');
+            
+            // Auto-scroll horizontally
+            const containerRect = container.getBoundingClientRect();
+            const scrollThreshold = 100; // pixels from edge to start scrolling
+            
+            if (ev.clientX > containerRect.right - scrollThreshold) {
+                startAutoScroll(1, container); // Scroll right
+            } else if (ev.clientX < containerRect.left + scrollThreshold) {
+                startAutoScroll(-1, container); // Scroll left
+            } else {
+                stopAutoScroll();
+            }
+            
+            // Remove all existing placeholders first
+            document.querySelectorAll('.card-placeholder').forEach(p => p.remove());
+            
+            if (targetCard && !targetCard.classList.contains('dragging')) {
+                const rect = targetCard.getBoundingClientRect();
+                const midpoint = rect.top + rect.height / 2;
+                
+                const placeholder = createPlaceholder();
+                
+                if (ev.clientY < midpoint) {
+                    targetCard.parentNode.insertBefore(placeholder, targetCard);
+                } else {
+                    targetCard.parentNode.insertBefore(placeholder, targetCard.nextSibling);
+                }
+                placeholder.classList.add('active');
+            } else if (dropZone && !dropZone.querySelector('.card')) {
+                const placeholder = createPlaceholder();
+                dropZone.appendChild(placeholder);
+                placeholder.classList.add('active');
+            }
+        }
+
+        function drag(ev) {
+            ev.dataTransfer.setData("text", ev.target.id);
+            ev.target.classList.add('dragging');
+        }
+
+        function dragend(ev) {
+            ev.target.classList.remove('dragging');
+            stopAutoScroll();
+            // Remove any remaining placeholders
+            document.querySelectorAll('.card-placeholder').forEach(p => p.remove());
+        }
+
+        function drop(ev) {
+            ev.preventDefault();
+            const data = ev.dataTransfer.getData("text");
+            const draggedElement = document.getElementById(data);
+            const dropZone = ev.target.closest('.column');
+            const targetCard = ev.target.closest('.card');
+            
+            if (!dropZone || !draggedElement) return;
+            
+            // Remove all placeholders
+            document.querySelectorAll('.card-placeholder').forEach(p => p.remove());
+            
+            // If dropping on another card
+            if (targetCard && targetCard !== draggedElement) {
+                const rect = targetCard.getBoundingClientRect();
+                const midpoint = rect.top + rect.height / 2;
+                
+                if (ev.clientY < midpoint) {
+                    dropZone.insertBefore(draggedElement, targetCard);
+                } else {
+                    dropZone.insertBefore(draggedElement, targetCard.nextSibling);
+                }
+            } else {
+                // If dropping directly on the column, insert at the top
+                const firstCard = dropZone.querySelector('.card');
+                if (firstCard) {
+                    dropZone.insertBefore(draggedElement, firstCard);
+                } else {
+                    dropZone.appendChild(draggedElement);
+                }
+            }
+            
+            updateColumnCounts();
+        }
+
+        function createCardContent(target) {
+            return `
+                <div class="card-title">${target.Organization}</div>
+                <div class="card-info">
+                    <div><strong>Address:</strong> ${target.Address}</div>
+                    ${target.Phone ? `<div><strong>Phone:</strong> ${target.Phone}</div>` : ''}
+                    ${target.Website ? `<div><strong>Website:</strong> <a href="${target.Website}" target="_blank" rel="noopener noreferrer">Visit Website ↗</a></div>` : ''}
+                    <div><strong>Population:</strong> ${target.Population ? Number(target.Population.replace(/[^0-9.-]+/g, '')).toLocaleString() : 'N/A'}</div>
+                    <div><strong>Median Income:</strong> ${target['Median HH Income'] ? '$' + Number(target['Median HH Income'].replace(/[^0-9.-]+/g, '')).toLocaleString() : 'N/A'}</div>
+                </div>
+            `;
+        }
+
+        function updateColumnCounts() {
+            const columns = ['not-contacted', 'initial-contact', 'in-discussion', 'partnership-agreed', 'partnership-active', 'not-interested'];
+            columns.forEach(columnId => {
+                const column = document.getElementById(columnId);
+                const count = column.getElementsByClassName('card').length;
+                const header = column.querySelector('.column-header');
+                let countSpan = header.querySelector('.column-count');
+                if (!countSpan) {
+                    countSpan = document.createElement('span');
+                    countSpan.className = 'column-count';
+                    header.appendChild(countSpan);
+                }
+                countSpan.textContent = count;
+            });
+        }
+
+        function createDropTargets(column) {
+            // Add drop target at the top of the column
+            const topTarget = document.createElement('div');
+            topTarget.className = 'card-drop-target';
+            column.insertBefore(topTarget, column.firstChild);
+
+            // Add drop targets between cards
+            const cards = column.getElementsByClassName('card');
+            Array.from(cards).forEach(card => {
+                const target = document.createElement('div');
+                target.className = 'card-drop-target';
+                card.parentNode.insertBefore(target, card.nextSibling);
+            });
+        }
+
+        function createPlaceholder() {
+            const placeholder = document.createElement('div');
+            placeholder.className = 'card-placeholder';
+            return placeholder;
+        }
+
+        function loadTargetsFromCSV() {
+            console.log('Starting CSV load...');
+            fetch('./data/athletic-center-targets-2024-01-02.csv')
+                .then(response => response.text())
+                .then(csv => {
+                    // Split into rows and remove empty rows
+                    const rows = csv.split('\n')
+                        .map(row => row.trim())
+                        .filter(row => row.length > 0);
+                    
+                    // Get header row
+                    const headers = rows[0].split(',');
+                    console.log('Headers:', headers);
+                    
+                    // Process each data row
+                    rows.slice(1).forEach((row, index) => {
+                        // Handle quoted values properly
+                        let columns = [];
+                        let inQuotes = false;
+                        let currentValue = '';
+                        
+                        for (let char of row) {
+                            if (char === '"') {
+                                inQuotes = !inQuotes;
+                            } else if (char === ',' && !inQuotes) {
+                                columns.push(currentValue.trim().replace(/^"|"$/g, ''));
+                                currentValue = '';
+                            } else {
+                                currentValue += char;
+                            }
+                        }
+                        columns.push(currentValue.trim().replace(/^"|"$/g, '')); // Add the last column
+                        
+                        console.log(`Row ${index + 1}:`, columns);
+                        
+                        if (columns.length > 10) {
+                            const target = {
+                                Organization: columns[0],
+                                Address: columns[1],
+                                Region: columns[2],
+                                Phone: columns[3],
+                                Website: columns[4].trim(),
+                                Notes: columns[5],
+                                Population: columns[7],
+                                'Median HH Income': columns[10]
+                            };
+                            
+                            console.log('Processing target:', target);
+                            
+                            const cardHtml = `
+                                <div class="card-title">${target.Organization}</div>
+                                <div class="card-info">
+                                    <div><strong>Address:</strong> ${target.Address}</div>
+                                    ${target.Phone ? `<div><strong>Phone:</strong> ${target.Phone}</div>` : ''}
+                                    ${target.Website ? `<div><strong>Website:</strong> <a href="${target.Website}" target="_blank" rel="noopener noreferrer">Visit Website ↗</a></div>` : ''}
+                                    <div><strong>Population:</strong> ${target.Population ? Number(target.Population.replace(/[^0-9.-]+/g, '')).toLocaleString() : 'N/A'}</div>
+                                    <div><strong>Median Income:</strong> ${target['Median HH Income'] ? '$' + Number(target['Median HH Income'].replace(/[^0-9.-]+/g, '')).toLocaleString() : 'N/A'}</div>
+                                </div>
+                            `;
+                            
+                            const card = document.createElement('div');
+                            card.className = 'card';
+                            card.id = 'card-' + target.Organization.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase();
+                            card.draggable = true;
+                            card.ondragstart = drag;
+                            card.ondragend = dragend;
+                            card.onclick = toggleCard;
+                            card.innerHTML = cardHtml;
+                            
+                            const notContactedColumn = document.getElementById('not-contacted');
+                            if (notContactedColumn) {
+                                // Insert at the top of the column
+                                const firstCard = notContactedColumn.querySelector('.card');
+                                if (firstCard) {
+                                    notContactedColumn.insertBefore(card, firstCard);
+                                } else {
+                                    notContactedColumn.appendChild(card);
+                                }
+                                updateColumnCounts();
+                            } else {
+                                console.error('Could not find not-contacted column');
+                            }
+                        } else {
+                            console.warn('Row has insufficient columns:', columns);
+                        }
+                    });
+                })
+                .catch(error => {
+                    console.error('Error loading CSV:', error);
+                    alert('Error loading CSV file. Check console for details.');
+                });
+        }
+
+        function exportToCSV() {
+            // Collect all cards and their current status
+            const cards = document.querySelectorAll('.card');
+            let csvContent = 'Organization,Status,Address,Phone,Website,Population,Median Income\n';
+            
+            cards.forEach(card => {
+                const organization = card.querySelector('.card-title').textContent.trim();
+                const status = card.closest('.column').id;
+                
+                // Extract other fields from card info
+                const cardInfo = card.querySelector('.card-info');
+                const infoFields = Array.from(cardInfo.querySelectorAll('div'));
+                
+                let address = '', phone = '', website = '', population = '', income = '';
+                
+                infoFields.forEach(field => {
+                    const text = field.textContent;
+                    if (text.includes('Address:')) {
+                        address = text.replace('Address:', '').trim();
+                    } else if (text.includes('Phone:')) {
+                        phone = text.replace('Phone:', '').trim();
+                    } else if (text.includes('Population:')) {
+                        population = text.replace('Population:', '').trim();
+                    } else if (text.includes('Median Income:')) {
+                        income = text.replace('Median Income:', '').trim();
+                    }
+                });
+                
+                const websiteLink = cardInfo.querySelector('a');
+                website = websiteLink ? websiteLink.href : '';
+
+                // Escape fields that might contain commas
+                const escapeCsvField = (field) => {
+                    if (field.includes(',') || field.includes('"') || field.includes('\n')) {
+                        return `"${field.replace(/"/g, '""')}"`;
+                    }
+                    return field;
+                };
+
+                csvContent += [
+                    escapeCsvField(organization),
+                    escapeCsvField(status),
+                    escapeCsvField(address),
+                    escapeCsvField(phone),
+                    escapeCsvField(website),
+                    escapeCsvField(population),
+                    escapeCsvField(income)
+                ].join(',') + '\n';
+            });
+
+            // Create and trigger download with timestamp
+            const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, -5);
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.setAttribute('href', url);
+            a.setAttribute('download', `target_statuses_${timestamp}.csv`);
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            window.URL.revokeObjectURL(url);
+        }
+
+        function importFromCSV(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const text = e.target.result;
+                const rows = text.split('\n').map(row => row.trim()).filter(row => row);
+                const headers = rows[0].toLowerCase().split(',');
+
+                // Get required column indices
+                const orgIndex = headers.indexOf('organization');
+                const statusIndex = headers.indexOf('status');
+                const addressIndex = headers.indexOf('address');
+                const phoneIndex = headers.indexOf('phone');
+                const websiteIndex = headers.indexOf('website');
+                const populationIndex = headers.indexOf('population');
+                const incomeIndex = headers.indexOf('median income');
+
+                if (orgIndex === -1) {
+                    alert('CSV must contain an "Organization" column');
+                    return;
+                }
+
+                // Clear existing cards
+                document.querySelectorAll('.card').forEach(card => card.remove());
+
+                // Process each data row
+                rows.slice(1).forEach(row => {
+                    // Handle quoted values properly
+                    let columns = [];
+                    let inQuotes = false;
+                    let currentValue = '';
+                    
+                    for (let char of row) {
+                        if (char === '"') {
+                            inQuotes = !inQuotes;
+                        } else if (char === ',' && !inQuotes) {
+                            columns.push(currentValue.trim().replace(/^"|"$/g, ''));
+                            currentValue = '';
+                        } else {
+                            currentValue += char;
+                        }
+                    }
+                    columns.push(currentValue.trim().replace(/^"|"$/g, '')); // Add the last column
+
+                    const target = {
+                        Organization: columns[orgIndex] || '',
+                        Address: columns[addressIndex] || '',
+                        Phone: columns[phoneIndex] || '',
+                        Website: columns[websiteIndex] || '',
+                        Population: columns[populationIndex] || '',
+                        'Median Income': columns[incomeIndex] || ''
+                    };
+
+                    // Create card HTML
+                    const cardHtml = `
+                        <div class="card-title">${target.Organization}</div>
+                        <div class="card-info">
+                            <div><strong>Address:</strong> ${target.Address}</div>
+                            ${target.Phone ? `<div><strong>Phone:</strong> ${target.Phone}</div>` : ''}
+                            ${target.Website ? `<div><strong>Website:</strong> <a href="${target.Website}" target="_blank" rel="noopener noreferrer">Visit Website ↗</a></div>` : ''}
+                            <div><strong>Population:</strong> ${target.Population}</div>
+                            <div><strong>Median Income:</strong> ${target['Median Income']}</div>
+                        </div>
+                    `;
+
+                    // Create and add card to appropriate column
+                    const card = document.createElement('div');
+                    card.className = 'card';
+                    card.id = 'card-' + target.Organization.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase();
+                    card.draggable = true;
+                    card.ondragstart = drag;
+                    card.ondragend = dragend;
+                    card.onclick = toggleCard;
+                    card.innerHTML = cardHtml;
+
+                    // Determine which column to add the card to
+                    let status = columns[statusIndex] || 'not-contacted';
+                    const column = document.getElementById(status.toLowerCase());
+                    if (column) {
+                        column.appendChild(card);
+                    } else {
+                        document.getElementById('not-contacted').appendChild(card);
+                    }
+                });
+
+                // Update column counts
+                updateColumnCounts();
+
+                // Reset file input
+                event.target.value = '';
+            };
+            reader.readAsText(file);
+        }
+
+        function toggleSortMenu(columnId) {
+            // Close all other menus first
+            document.querySelectorAll('.sort-menu').forEach(menu => {
+                if (menu.id !== `sort-menu-${columnId}`) {
+                    menu.classList.remove('active');
+                }
+            });
+            
+            // Toggle the clicked menu
+            const menu = document.getElementById(`sort-menu-${columnId}`);
+            menu.classList.toggle('active');
+            
+            // Close menu when clicking outside
+            const closeMenu = (e) => {
+                if (!menu.contains(e.target) && !e.target.matches('.sort-button')) {
+                    menu.classList.remove('active');
+                    document.removeEventListener('click', closeMenu);
+                }
+            };
+            document.addEventListener('click', closeMenu);
+        }
+
+        function sortColumn(columnId, field, direction) {
+            const column = document.getElementById(columnId);
+            const cards = Array.from(column.querySelectorAll('.card'));
+            
+            cards.sort((a, b) => {
+                let valueA, valueB;
+                
+                switch(field) {
+                    case 'name':
+                        valueA = a.querySelector('.card-title').textContent.trim().toLowerCase();
+                        valueB = b.querySelector('.card-title').textContent.trim().toLowerCase();
+                        return direction === 'asc' 
+                            ? valueA.localeCompare(valueB)
+                            : valueB.localeCompare(valueA);
+                    
+                    case 'population':
+                        valueA = Number(a.querySelector('.card-info div:nth-last-child(2)').textContent
+                            .replace('Population:', '').replace(/[^0-9.-]+/g, '')) || 0;
+                        valueB = Number(b.querySelector('.card-info div:nth-last-child(2)').textContent
+                            .replace('Population:', '').replace(/[^0-9.-]+/g, '')) || 0;
+                        return direction === 'asc' ? valueA - valueB : valueB - valueA;
+                    
+                    case 'income':
+                        valueA = Number(a.querySelector('.card-info div:nth-last-child(1)').textContent
+                            .replace('Median Income:', '').replace(/[^0-9.-]+/g, '')) || 0;
+                        valueB = Number(b.querySelector('.card-info div:nth-last-child(1)').textContent
+                            .replace('Median Income:', '').replace(/[^0-9.-]+/g, '')) || 0;
+                        return direction === 'asc' ? valueA - valueB : valueB - valueA;
+                }
+            });
+            
+            // Remove existing cards
+            cards.forEach(card => card.remove());
+            
+            // Add sorted cards back
+            cards.forEach(card => column.appendChild(card));
+            
+            // Close the sort menu
+            document.getElementById(`sort-menu-${columnId}`).classList.remove('active');
+        }
+
+        function toggleCard(event) {
+            // Only toggle if we're not dragging and not clicking a link
+            if (!event.target.closest('a') && !this.classList.contains('dragging')) {
+                this.classList.toggle('expanded');
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            const columns = [
+                { id: 'not-contacted', title: 'Not Contacted' },
+                { id: 'initial-contact', title: 'Initial Contact' },
+                { id: 'in-discussion', title: 'In Discussion' },
+                { id: 'partnership-agreed', title: 'Partnership Agreed' },
+                { id: 'partnership-active', title: 'Partnership Active' },
+                { id: 'not-interested', title: 'Not Interested' }
+            ];
+            
+            columns.forEach(column => {
+                const header = document.querySelector(`#${column.id} .column-header`);
+                header.innerHTML = `
+                    <span>${column.title}</span>
+                    <div style="display: flex; align-items: center;">
+                        <span class="column-count">0</span>
+                        <div class="sort-button" onclick="toggleSortMenu('${column.id}')">↕</div>
+                        <div class="sort-menu" id="sort-menu-${column.id}">
+                            <div class="sort-option" onclick="sortColumn('${column.id}', 'name', 'asc')">
+                                Name ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('${column.id}', 'name', 'desc')">
+                                Name ↑
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('${column.id}', 'population', 'asc')">
+                                Population ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('${column.id}', 'population', 'desc')">
+                                Population ↑
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('${column.id}', 'income', 'asc')">
+                                Income ↓
+                            </div>
+                            <div class="sort-option" onclick="sortColumn('${column.id}', 'income', 'desc')">
+                                Income ↑
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        });
+    </script>
+</body>
+</html>
