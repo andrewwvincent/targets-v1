@@ -2,7 +2,7 @@ import pandas as pd
 import numpy as np
 from scipy.spatial import ConvexHull
 import folium
-from folium.plugins import GroupedLayerControl
+from folium.plugins import GroupedLayerControl, MarkerCluster
 
 def load_cluster_data():
     """Load cluster data from CSV files"""
@@ -80,6 +80,41 @@ def create_cluster_map(all_zips, cluster_data):
         'Ungraded': '#AAAAAA'  # Gray
     }
 
+    # Create feature groups for ZIP grades with clustering
+    grade_groups = {}
+    for grade in grade_colors.keys():
+        group = folium.FeatureGroup(name=f'Grade {grade}', show=False)
+        marker_cluster = MarkerCluster().add_to(group)
+        grade_groups[grade] = {'group': group, 'cluster': marker_cluster}
+        m.add_child(group)
+    
+    # Add ZIP points to appropriate grade groups
+    for _, row in all_zips.iterrows():
+        # Skip if coordinates are missing
+        if pd.isna(row['latitude']) or pd.isna(row['longitude']):
+            continue
+            
+        grade = row['grade']
+        popup_html = f"""
+        <b>ZIP: {row['ZCTA5']}</b><br>
+        Grade: {grade}<br>
+        Population: {row['Total Pop']:,.0f}<br>
+        Income: ${float(str(row['Median Income']).replace('+', '').replace(',', '')):,.0f}<br>
+        Families with Children: {row['Families with Children <18']:,.0f}
+        """
+        
+        folium.CircleMarker(
+            location=[row['latitude'], row['longitude']],
+            radius=3,
+            color='black',  # Stroke color
+            weight=1,      # Stroke width
+            fill=True,
+            fillColor=grade_colors[grade],
+            fillOpacity=0.7,
+            popup=popup_html,
+            opacity=1
+        ).add_to(grade_groups[grade]['cluster'])
+    
     # Load athletic centers data
     athletic_centers = pd.read_csv('data/athletic-center-targets-2024-01-02.csv')
     athletic_centers['Population'] = pd.to_numeric(athletic_centers['Population'].str.replace(',', ''), errors='coerce')
@@ -102,46 +137,11 @@ def create_cluster_map(all_zips, cluster_data):
     legend_html += '</div>'
     m.get_root().html.add_child(folium.Element(legend_html))
     
-    # Create feature groups for ZIP grades
-    grade_groups = {}
-    for grade in grade_colors.keys():
-        group = folium.FeatureGroup(name=f'Grade {grade}', show=False)
-        grade_groups[grade] = group
-        m.add_child(group)
-    
-    # Add ZIP points to appropriate grade groups
-    for _, row in all_zips.iterrows():
-        # Skip if coordinates are missing
-        if pd.isna(row['latitude']) or pd.isna(row['longitude']):
-            continue
-            
-        grade = row['grade']
-        popup_html = f"""
-        <b>ZIP: {row['ZCTA5']}</b><br>
-        Grade: {grade}<br>
-        Population: {row['Total Pop']:,.0f}<br>
-        Income: ${float(str(row['Median Income']).replace('+', '').replace(',', '')):,.0f}<br>
-        Families with Children: {row['Families with Children <18']:,.0f}
-        """
-        
-        folium.CircleMarker(
-            location=[row['latitude'], row['longitude']],
-            radius=3,
-            color=grade_colors[grade],
-            fill=True,
-            popup=popup_html,
-            opacity=0.7
-        ).add_to(grade_groups[grade])
-    
     # Create cluster groups
     cluster_groups = {}
     for analysis_name, df in cluster_data.items():
-        print(f"\nProcessing {analysis_name} clusters:")
-        print(f"Number of ZIPs: {len(df)}")
-        print(f"Unique cluster IDs: {df['cluster'].unique()}")
-        print(f"Sample of coordinates:\n{df[['latitude', 'longitude', 'cluster']].head()}")
-        
-        group = folium.FeatureGroup(name=analysis_name, show=True)
+        show_layer = analysis_name == 'A_10mi'
+        group = folium.FeatureGroup(name=analysis_name, show=show_layer)
         cluster_groups[analysis_name] = group
         
         # Process each cluster in this analysis
@@ -190,8 +190,9 @@ def create_cluster_map(all_zips, cluster_data):
         # Add group to map after all polygons are added
         m.add_child(group)
 
-    # Create athletic centers group
+    # Create athletic centers group with clustering
     athletic_centers_group = folium.FeatureGroup(name='Athletic Centers', show=True)
+    athletic_centers_cluster = MarkerCluster().add_to(athletic_centers_group)
     m.add_child(athletic_centers_group)
 
     # Add athletic centers to map
@@ -213,19 +214,20 @@ def create_cluster_map(all_zips, cluster_data):
             location=[row['Latitude'], row['Longitude']],
             popup=popup_html,
             icon=folium.Icon(color='red', icon='info-sign')
-        ).add_to(athletic_centers_group)
+        ).add_to(athletic_centers_cluster)
     
-    # Add layer control
+    # Add layer control (hidden but functional)
     folium.LayerControl(
         position='topright',
-        collapsed=False
+        collapsed=True,
+        overlay=True
     ).add_to(m)
     
     # Add custom control panel HTML
     custom_control_html = """
-    <div class='custom-control' style='position: fixed; bottom: 10px; right: 10px; z-index: 1000; background: white; padding: 10px; border: 2px solid grey; border-radius: 5px'>
+    <div class='custom-control' style='position: fixed; top: 10px; right: 50px; z-index: 1000; background: white; padding: 10px; border: 2px solid grey; border-radius: 5px'>
         <div>
-            <h4>Custom Controls</h4>
+            <h4>Map Controls</h4>
             <div id='custom-zip-controls'>
                 <label>
                     <input type='checkbox' class='parent-toggle' data-group='zip'/> ZIP Codes
@@ -251,9 +253,10 @@ def create_cluster_map(all_zips, cluster_data):
     """
     
     for name in cluster_colors.keys():
+        is_a_10mi = 'checked' if name == 'A_10mi' else ''
         custom_control_html += f"""
             <label>
-                <input type='checkbox' checked class='custom-toggle cluster-toggle' data-layer='{name}'/> {name}
+                <input type='checkbox' {is_a_10mi} class='custom-toggle cluster-toggle' data-layer='{name}'/> {name}
             </label><br>
         """
     
