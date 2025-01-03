@@ -32,7 +32,7 @@ def init_database():
         median_income INTEGER,
         latitude REAL,
         longitude REAL,
-        status TEXT DEFAULT 'not-contacted'
+        status TEXT DEFAULT 'not contacted'
     )
     ''')
     
@@ -71,7 +71,19 @@ def init_database():
     
     # Add status column if it doesn't exist
     if 'status' not in targets_df.columns:
-        targets_df['status'] = 'not-contacted'
+        targets_df['status'] = 'not contacted'  # Changed from 'not-contacted' to match kanban
+    
+    # Clean up any existing statuses to match kanban format
+    status_mapping = {
+        'not-contacted': 'not contacted',
+        'initial-contact': 'initial contact',
+        'in-discussion': 'in discussion',
+        'partnership-agreed': 'partnership agreed',
+        'partnership-active': 'partnership active',
+        'not-interested': 'not interested'
+    }
+    
+    targets_df['status'] = targets_df['status'].map(status_mapping).fillna('not contacted')
     
     # Insert targets data
     for _, row in targets_df.iterrows():
@@ -93,7 +105,7 @@ def init_database():
             row['Median HH Income'],
             row['Latitude'],
             row['Longitude'],
-            row.get('status', 'not-contacted')
+            row.get('status', 'not contacted')
         ))
     
     # Load and process ZIP data

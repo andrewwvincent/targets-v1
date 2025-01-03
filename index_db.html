@@ -1,7 +1,8 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta http-equiv="content-type" content="text/html; charset=UTF-8" />
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Target Locations Map</title>
     <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.3/dist/leaflet.js"></script>
     <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
@@ -11,6 +12,27 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css"/>
     <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css"/>
     <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #map-container {
+            flex: 1;
+            position: relative;
+            min-height: 50vh;
+        }
+
         #map {
             position: absolute;
             top: 0;
@@ -20,6 +42,19 @@
             height: 100%;
             width: 100%;
         }
+
+        #kanban-container {
+            flex: 1;
+            min-height: 50vh;
+            border-top: 2px solid #ccc;
+        }
+
+        #kanban-frame {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
         .legend {
             padding: 10px;
             background: white;
@@ -79,37 +114,43 @@
     </style>
 </head>
 <body>
-    <div id="map"></div>
-    <div class="filter-control">
-        <h4>Filters</h4>
-        <div>
-            <div class="parent-checkbox">
-                <input type="checkbox" id="all_grades">
-                <label for="all_grades">ZIP Grades</label>
-            </div>
-            <div class="child-checkboxes" id="gradeFilters"></div>
-        </div>
-        <div>
-            <div class="parent-checkbox">
-                <input type="checkbox" id="all_clusters">
-                <label for="all_clusters">Cluster Types</label>
-            </div>
-            <div class="child-checkboxes" id="clusterFilters"></div>
-        </div>
-        <div>
-            <div class="parent-checkbox">
-                <input type="checkbox" id="all_targets">
-                <label for="all_targets">All Targets</label>
-            </div>
-            <div class="child-checkboxes">
+    <div id="map-container">
+        <div id="map"></div>
+        <div class="filter-control">
+            <h4>Filters</h4>
+            <div>
                 <div class="parent-checkbox">
-                    <input type="checkbox" id="athletic_centers">
-                    <label for="athletic_centers">Athletic Centers</label>
+                    <input type="checkbox" id="all_grades">
+                    <label for="all_grades">ZIP Grades</label>
                 </div>
-                <div class="child-checkboxes" id="statusFilters"></div>
+                <div class="child-checkboxes" id="gradeFilters"></div>
+            </div>
+            <div>
+                <div class="parent-checkbox">
+                    <input type="checkbox" id="all_clusters">
+                    <label for="all_clusters">Cluster Types</label>
+                </div>
+                <div class="child-checkboxes" id="clusterFilters"></div>
+            </div>
+            <div>
+                <div class="parent-checkbox">
+                    <input type="checkbox" id="all_targets">
+                    <label for="all_targets">All Targets</label>
+                </div>
+                <div class="child-checkboxes">
+                    <div class="parent-checkbox">
+                        <input type="checkbox" id="athletic_centers">
+                        <label for="athletic_centers">Athletic Centers</label>
+                    </div>
+                    <div class="child-checkboxes" id="statusFilters"></div>
+                </div>
             </div>
         </div>
     </div>
+    <div id="kanban-container">
+        <iframe id="kanban-frame" src="kanban.html"></iframe>
+    </div>
+
     <script>
         // Initialize the map
         var map = L.map('map').setView([39.8283, -98.5795], 4);
@@ -149,11 +190,12 @@
         };
 
         const statusColors = {
-            'not-contacted': '#AAAAAA',  // Gray
-            'contacted': '#FFDC00',      // Yellow
-            'meeting-scheduled': '#0074D9', // Blue
-            'contract-sent': '#2ECC40',    // Green
-            'signed': '#FF4136'            // Red
+            'not contacted': '#95a5a6',
+            'initial contact': '#3498db',
+            'in discussion': '#f1c40f',
+            'partnership agreed': '#2ecc71',
+            'partnership active': '#27ae60',
+            'not interested': '#e74c3c'
         };
 
         // Function to get marker size based on zoom level
@@ -173,30 +215,31 @@
             zoomToBoundsOnClick: true,
             iconCreateFunction: function(cluster) {
                 const childCount = cluster.getChildCount();
-                let size = 'small';
-                if (childCount > 50) size = 'large';
-                else if (childCount > 10) size = 'medium';
-                
-                // Get all markers in the cluster
+                let c = ' marker-cluster-';
+                if (childCount < 10) {
+                    c += 'small';
+                } else if (childCount < 100) {
+                    c += 'medium';
+                } else {
+                    c += 'large';
+                }
+
                 const markers = cluster.getAllChildMarkers();
-                
-                // Count markers by status
-                const statusCounts = {};
-                markers.forEach(marker => {
+                const statusCounts = markers.reduce((counts, marker) => {
                     const status = marker.options.status;
-                    statusCounts[status] = (statusCounts[status] || 0) + 1;
-                });
-                
-                // Find the dominant status
-                let dominantStatus = Object.entries(statusCounts)
+                    counts[status] = (counts[status] || 0) + 1;
+                    return counts;
+                }, {});
+
+                const dominantStatus = Object.entries(statusCounts)
                     .sort((a, b) => b[1] - a[1])[0][0];
-                
-                return L.divIcon({
-                    html: `<div style="background-color: ${statusColors[dominantStatus]}">
-                            <span>${childCount}</span>
-                          </div>`,
-                    className: `marker-cluster marker-cluster-${size}`,
-                    iconSize: L.point(40, 40)
+
+                const color = statusColors[dominantStatus];
+
+                return new L.DivIcon({
+                    html: '<div style="background-color: ' + color + '"><span>' + childCount + '</span></div>',
+                    className: 'marker-cluster' + c,
+                    iconSize: new L.Point(40, 40)
                 });
             }
         });
@@ -282,7 +325,12 @@
         Promise.all([
             fetch('/api/targets').then(resp => resp.json()),
             fetch('/api/zips').then(resp => resp.json())
-        ]).then(([targets, zips]) => {
+        ]).then(([targetsData, zips]) => {
+            // Store targets globally
+            targets = targetsData;
+            console.log("Loaded targets:", targets.length);
+            console.log("Sample target:", targets[0]);
+
             // Create filter controls
             const gradeFilters = document.getElementById('gradeFilters');
             Object.entries(gradeColors).forEach(([grade, color]) => {
@@ -334,10 +382,10 @@
             Object.entries(statusColors).forEach(([status, color]) => {
                 const div = document.createElement('div');
                 div.innerHTML = `
-                    <input type="checkbox" id="status_${status}" checked>
-                    <label for="status_${status}">
+                    <input type="checkbox" id="status_${status.replace(' ', '_')}" checked>
+                    <label for="status_${status.replace(' ', '_')}">
                         <i class="fas fa-map-marker-alt" style="color: ${color}"></i>
-                        ${status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        ${status.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
                     </label>
                 `;
                 div.querySelector('input').addEventListener('change', () => {
@@ -364,121 +412,159 @@
                 updateFilters();
             });
 
+            // Set initial checkbox states
+            document.getElementById('all_targets').checked = true;
+            document.getElementById('athletic_centers').checked = true;
+            document.getElementById('all_grades').checked = false;
+            document.getElementById('all_clusters').checked = false;
+
             // Function to update visible layers based on filters
             function updateFilters() {
+                console.log("Updating filters...");
+                console.log("Targets available:", targets.length);
+                
                 // Clear existing markers
                 zipMarkers.clearLayers();
                 targetMarkers.clearLayers();
-                Object.values(clusterLayers).forEach(layer => layer.remove());
+                map.removeLayer(targetMarkers);
+                map.removeLayer(zipMarkers);
 
-                // Get selected filters
-                const selectedGrades = Object.keys(gradeColors).filter(grade => 
-                    document.getElementById(`grade_${grade}`).checked
-                );
-                const selectedClusters = Object.keys(clusterColors).filter(type => 
-                    document.getElementById(`cluster_${type}`).checked
-                );
-                const selectedStatuses = Object.keys(statusColors).filter(status => 
-                    document.getElementById(`status_${status}`).checked
-                );
+                // Handle ZIP markers
+                if (document.getElementById('all_grades').checked) {
+                    const selectedGrades = Object.keys(gradeColors).filter(grade => 
+                        document.getElementById(`grade_${grade}`).checked
+                    );
+                    console.log("Selected grades:", selectedGrades);
 
-                // Add filtered ZIP markers
-                zips.forEach(zip => {
-                    if (selectedGrades.includes(zip.grade)) {
-                        const marker = L.circleMarker([zip.latitude, zip.longitude], {
-                            radius: 3,
-                            color: 'black',
-                            weight: 1,
-                            fill: true,
-                            fillColor: gradeColors[zip.grade],
-                            fillOpacity: 0.7,
-                            opacity: 1
-                        });
+                    zips.forEach(zip => {
+                        if (selectedGrades.includes(zip.grade)) {
+                            const marker = L.circleMarker([zip.latitude, zip.longitude], {
+                                radius: 3,
+                                color: 'black',
+                                weight: 1,
+                                fill: true,
+                                fillColor: gradeColors[zip.grade],
+                                fillOpacity: 0.7,
+                                opacity: 1
+                            });
 
-                        const popupContent = `
-                            <b>ZIP: ${zip.zip_code}</b><br>
-                            Grade: ${zip.grade}<br>
-                            Population: ${zip.total_pop.toLocaleString()}<br>
-                            Income: $${zip.median_income.toLocaleString()}<br>
-                            Households: ${zip.households.toLocaleString()}
-                        `;
-                        
-                        marker.bindPopup(popupContent);
-                        marker.addTo(zipMarkers);
+                            const popupContent = `
+                                <b>ZIP: ${zip.zip_code}</b><br>
+                                Grade: ${zip.grade}<br>
+                                Population: ${zip.total_pop.toLocaleString()}<br>
+                                Income: $${zip.median_income.toLocaleString()}<br>
+                                Households: ${zip.households.toLocaleString()}
+                            `;
+                            
+                            marker.bindPopup(popupContent);
+                            zipMarkers.addLayer(marker);
+                        }
+                    });
+
+                    if (zipMarkers.getLayers().length > 0) {
+                        zipMarkers.addTo(map);
                     }
-                });
+                }
 
-                // Add filtered target markers
-                targets.forEach(target => {
-                    if (selectedStatuses.includes(target.status)) {
+                // Handle target markers
+                if (document.getElementById('all_targets').checked) {
+                    const selectedStatuses = Object.keys(statusColors).filter(status => 
+                        document.getElementById(`status_${status.replace(' ', '_')}`).checked
+                    );
+                    console.log("Selected statuses:", selectedStatuses);
+
+                    targets.forEach(target => {
+                        if (!target.latitude || !target.longitude) {
+                            console.log("Target missing coordinates:", target);
+                            return;
+                        }
+                        
+                        const status = target.status || 'not contacted';
+                        if (!selectedStatuses.includes(status)) {
+                            console.log("Target status not selected:", status);
+                            return;
+                        }
+
+                        console.log("Adding target:", target.organization, target.latitude, target.longitude);
+
                         const currentZoom = map.getZoom();
                         const size = getMarkerSize(currentZoom);
-                        const faSize = Math.floor(size * 1.5); // Make Font Awesome icons larger
+                        const faSize = Math.floor(size * 1.5);
+                        
                         const marker = L.marker([target.latitude, target.longitude], {
                             icon: L.divIcon({
                                 className: 'custom-div-icon',
-                                html: `<i class="fas fa-map-marker-alt map-marker" style="color: ${statusColors[target.status]}; font-size: ${faSize}px;"></i>`,
+                                html: `<i class="fas fa-map-marker-alt map-marker" style="color: ${statusColors[status]}; font-size: ${faSize}px;"></i>`,
                                 iconSize: [size, size],
                                 iconAnchor: [size/2, faSize]
                             }),
-                            status: target.status // Store status for cluster coloring
+                            status: status
                         });
 
                         const popupContent = `
                             <b>${target.organization}</b><br>
                             ${target.address}<br>
                             Phone: ${target.phone || 'N/A'}<br>
-                            Status: ${target.status.replace('-', ' ').replace(/\b\w/g, l => l.toUpperCase())}<br>
-                            Population: ${target.population.toLocaleString()}<br>
-                            Income: $${target.median_income.toLocaleString()}
+                            Status: ${status.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}<br>
+                            Population: ${target.population ? target.population.toLocaleString() : 'N/A'}<br>
+                            Income: ${target.median_income ? '$' + target.median_income.toLocaleString() : 'N/A'}
                         `;
                         
                         marker.bindPopup(popupContent);
                         targetMarkers.addLayer(marker);
+                    });
+
+                    console.log("Target markers added:", targetMarkers.getLayers().length);
+                    if (targetMarkers.getLayers().length > 0) {
+                        targetMarkers.addTo(map);
                     }
-                });
+                }
 
-                // Add filtered cluster layers
-                selectedClusters.forEach(clusterType => {
-                    fetch(`/api/clusters/${clusterType}`).then(resp => resp.json())
-                        .then(clusters => {
-                            const layer = L.layerGroup();
-                            Object.entries(clusters).forEach(([clusterId, clusterZips]) => {
-                                const coords = clusterZips.map(zip => [zip.lat, zip.lng]);
-                                if (coords.length >= 3) {
-                                    const hull = createConvexHull(coords);
-                                    const totalPop = clusterZips.reduce((sum, zip) => sum + zip.total_pop, 0);
-                                    const avgIncome = clusterZips.reduce((sum, zip) => sum + zip.median_income, 0) / clusterZips.length;
+                // Handle cluster layers separately
+                const selectedClusters = Object.keys(clusterColors).filter(type => 
+                    document.getElementById(`cluster_${type}`).checked
+                );
+                console.log("Selected clusters:", selectedClusters);
 
-                                    const polygon = L.polygon(hull, {
-                                        color: clusterColors[clusterType],
-                                        weight: 2,
-                                        fill: true,
-                                        fillColor: clusterColors[clusterType],
-                                        fillOpacity: 0.2
-                                    });
+                // Remove existing cluster layers
+                Object.values(clusterLayers).forEach(layer => layer.remove());
+                clusterLayers = {};
 
-                                    const popupContent = `
-                                        <b>Cluster Information</b><br>
-                                        Type: ${clusterType}<br>
-                                        Cluster ID: ${clusterId}<br>
-                                        ZIPs: ${clusterZips.length}<br>
-                                        Total Population: ${totalPop.toLocaleString()}<br>
-                                        Average Income: $${avgIncome.toLocaleString()}
-                                    `;
+                // Add new cluster layers
+                if (selectedClusters.length > 0) {
+                    selectedClusters.forEach(clusterType => {
+                        fetch(`/api/clusters/${clusterType}`).then(resp => resp.json())
+                            .then(clusters => {
+                                const layer = L.layerGroup();
+                                Object.entries(clusters).forEach(([clusterId, clusterZips]) => {
+                                    const coords = clusterZips.map(zip => [zip.lat, zip.lng]);
+                                    if (coords.length >= 3) {
+                                        const hull = createConvexHull(coords);
+                                        const totalPop = clusterZips.reduce((sum, zip) => sum + zip.total_pop, 0);
+                                        const avgIncome = clusterZips.reduce((sum, zip) => sum + zip.median_income, 0) / clusterZips.length;
 
-                                    polygon.bindPopup(popupContent);
-                                    polygon.addTo(layer);
+                                        const polygon = L.polygon(hull, {
+                                            color: clusterColors[clusterType],
+                                            fillOpacity: 0.2,
+                                            weight: 2
+                                        }).bindPopup(`
+                                            <b>Cluster ${clusterId}</b><br>
+                                            ZIPs: ${clusterZips.length}<br>
+                                            Total Population: ${totalPop.toLocaleString()}<br>
+                                            Average Income: $${Math.round(avgIncome).toLocaleString()}
+                                        `);
+                                        
+                                        layer.addLayer(polygon);
+                                    }
+                                });
+                                
+                                clusterLayers[clusterType] = layer;
+                                if (document.getElementById(`cluster_${clusterType}`).checked) {
+                                    layer.addTo(map);
                                 }
                             });
-                            clusterLayers[clusterType] = layer;
-                            layer.addTo(map);
-                        });
-                });
-
-                // Add layers to map
-                zipMarkers.addTo(map);
-                targetMarkers.addTo(map);
+                    });
+                }
             }
 
             // Initial parent checkbox states
@@ -487,7 +573,7 @@
             updateParentCheckbox('athletic_centers', '#statusFilters input[type="checkbox"]');
             updateParentCheckbox('all_targets', '#athletic_centers');
 
-            // Initial filter update
+            // Initial update
             updateFilters();
         });
     </script>
