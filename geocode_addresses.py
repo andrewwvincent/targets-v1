@@ -145,13 +145,13 @@ def geocode_address(address, zip_code=None, zip_data=None):
 
 # Load the CSV
 csv_path = 'data/athletic-center-targets-2024-01-02.csv'
-df = pd.read_csv(csv_path)
+df = pd.read_csv(csv_path, encoding='latin1')
 
 # Load ZIP data from clusters
 zip_data = None
 cluster_file = 'data/A_5mi.csv'
 if os.path.exists(cluster_file):
-    zip_data = pd.read_csv(cluster_file)
+    zip_data = pd.read_csv(cluster_file, encoding='latin1')
     zip_data.set_index('ZIP', inplace=True)
     print("Loaded ZIP code data for nearby location lookup")
 
@@ -182,7 +182,7 @@ for i, (idx, row) in enumerate(df.iterrows(), 1):
     time.sleep(1)  # Be nice to the geocoding service
 
 # Save updated CSV
-df.to_csv(csv_path, index=False)
+df.to_csv(csv_path, index=False, encoding='latin1')
 
 # Report results
 missing = df[df['Latitude'].isna() | df['Longitude'].isna()].shape[0]
