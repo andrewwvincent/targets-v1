@@ -140,26 +140,72 @@ def get_kanban_data():
 def update_status():
     data = request.json
     organization = data.get('organization')
-    new_status = data.get('status').replace(' ', '-')  # Convert spaces to hyphens
+    new_status = data.get('status')
     
     if not organization or not new_status:
-        return jsonify({'error': 'Missing required fields'}), 400
-    
+        return jsonify({'error': 'Missing organization or status'}), 400
+
     conn = get_db_connection()
-    cursor = conn.cursor()
-    
     try:
-        cursor.execute('''
+        # Get current status
+        current = conn.execute(
+            'SELECT status FROM targets WHERE organization = ?',
+            (organization,)
+        ).fetchone()
+        
+        if not current:
+            conn.close()
+            return jsonify({'error': 'Organization not found'}), 404
+        
+        old_status = current[0]
+        
+        # Update status and last_updated timestamp
+        conn.execute('''
             UPDATE targets 
-            SET status = ? 
+            SET status = ?, last_updated = CURRENT_TIMESTAMP 
             WHERE organization = ?
         ''', (new_status, organization))
+        
+        # Log the change
+        conn.execute('''
+            INSERT INTO activity_log (organization, old_status, new_status)
+            VALUES (?, ?, ?)
+        ''', (organization, old_status, new_status))
+        
         conn.commit()
-        conn.close()
-        return jsonify({'success': True})
-    except Exception as e:
-        conn.close()
+        return jsonify({'success': True, 'old_status': old_status, 'new_status': new_status})
+    
+    except sqlite3.Error as e:
+        conn.rollback()
         return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
+
+@app.route('/api/activity_log', methods=['GET'])
+def get_activity_log():
+    conn = get_db_connection()
+    try:
+        # Get recent activity log entries
+        logs = conn.execute('''
+            SELECT a.*, t.organization 
+            FROM activity_log a
+            JOIN targets t ON a.organization = t.organization
+            ORDER BY a.timestamp DESC
+            LIMIT 100
+        ''').fetchall()
+        
+        return jsonify([{
+            'id': log[0],
+            'organization': log[1],
+            'old_status': log[2],
+            'new_status': log[3],
+            'timestamp': log[4]
+        } for log in logs])
+    
+    except sqlite3.Error as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        conn.close()
 
 if __name__ == '__main__':
     try:

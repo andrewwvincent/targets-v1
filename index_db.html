@@ -30,7 +30,8 @@
         #map-container {
             flex: 1;
             position: relative;
-            min-height: 50vh;
+            min-height: 200px;
+            height: 60%;
         }
 
         #map {
@@ -43,10 +44,33 @@
             width: 100%;
         }
 
+        #resize-handle {
+            height: 10px;
+            background: #e0e0e0;
+            cursor: row-resize;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            user-select: none;
+        }
+
+        #resize-handle::before {
+            content: "";
+            width: 30px;
+            height: 4px;
+            background: #999;
+            border-radius: 2px;
+        }
+
+        #resize-handle:hover {
+            background: #ccc;
+        }
+
         #kanban-container {
             flex: 1;
-            min-height: 50vh;
-            border-top: 2px solid #ccc;
+            min-height: 200px;
+            height: 40%;
+            overflow: hidden;
         }
 
         #kanban-frame {
@@ -147,6 +171,7 @@
             </div>
         </div>
     </div>
+    <div id="resize-handle"></div>
     <div id="kanban-container">
         <iframe id="kanban-frame" src="kanban.html"></iframe>
     </div>
@@ -190,12 +215,12 @@
         };
 
         const statusColors = {
-            'not contacted': '#95a5a6',
-            'initial contact': '#3498db',
-            'in discussion': '#f1c40f',
-            'partnership agreed': '#2ecc71',
-            'partnership active': '#27ae60',
-            'not interested': '#e74c3c'
+            'not contacted': '#808080',      // Gray
+            'initial contact': '#FFA500',    // Orange
+            'in discussion': '#4169E1',      // Royal Blue
+            'partnership agreed': '#32CD32',  // Lime Green
+            'partnership active': '#228B22',  // Forest Green
+            'not interested': '#FF0000'      // Red
         };
 
         // Function to get marker size based on zoom level
@@ -381,11 +406,12 @@
             const statusFilters = document.getElementById('statusFilters');
             Object.entries(statusColors).forEach(([status, color]) => {
                 const div = document.createElement('div');
+                const statusId = status.replace(/ /g, '_');
                 div.innerHTML = `
-                    <input type="checkbox" id="status_${status.replace(' ', '_')}" checked>
-                    <label for="status_${status.replace(' ', '_')}">
+                    <input type="checkbox" id="status_${statusId}" checked>
+                    <label for="status_${statusId}">
                         <i class="fas fa-map-marker-alt" style="color: ${color}"></i>
-                        ${status.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                        ${status.replace(/\b\w/g, l => l.toUpperCase())}
                     </label>
                 `;
                 div.querySelector('input').addEventListener('change', () => {
@@ -467,12 +493,18 @@
                 }
 
                 // Handle target markers
-                if (document.getElementById('all_targets').checked) {
-                    const selectedStatuses = Object.keys(statusColors).filter(status => 
-                        document.getElementById(`status_${status.replace(' ', '_')}`).checked
-                    );
-                    console.log("Selected statuses:", selectedStatuses);
+                const allTargetsChecked = document.getElementById('all_targets').checked;
+                const athleticCentersChecked = document.getElementById('athletic_centers').checked;
 
+                // Get selected statuses, using underscores in IDs
+                const selectedStatuses = Object.keys(statusColors).filter(status => {
+                    const statusId = `status_${status.replace(/ /g, '_')}`;
+                    return document.getElementById(statusId).checked;
+                });
+                console.log("Selected statuses:", selectedStatuses);
+
+                // Only proceed if either all targets or specific statuses are selected
+                if (allTargetsChecked || selectedStatuses.length > 0) {
                     targets.forEach(target => {
                         if (!target.latitude || !target.longitude) {
                             console.log("Target missing coordinates:", target);
@@ -480,12 +512,15 @@
                         }
                         
                         const status = target.status || 'not contacted';
+                        // Show the marker if either:
+                        // 1. All targets are checked, or
+                        // 2. The specific status is checked
                         if (!selectedStatuses.includes(status)) {
                             console.log("Target status not selected:", status);
                             return;
                         }
 
-                        console.log("Adding target:", target.organization, target.latitude, target.longitude);
+                        console.log("Adding target:", target.organization, target.latitude, target.longitude, status);
 
                         const currentZoom = map.getZoom();
                         const size = getMarkerSize(currentZoom);
@@ -505,7 +540,7 @@
                             <b>${target.organization}</b><br>
                             ${target.address}<br>
                             Phone: ${target.phone || 'N/A'}<br>
-                            Status: ${status.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}<br>
+                            Status: ${status.replace(/\b\w/g, l => l.toUpperCase())}<br>
                             Population: ${target.population ? target.population.toLocaleString() : 'N/A'}<br>
                             Income: ${target.median_income ? '$' + target.median_income.toLocaleString() : 'N/A'}
                         `;
@@ -575,6 +610,142 @@
 
             // Initial update
             updateFilters();
+        });
+
+        // Add resize handle functionality
+        const mapContainer = document.getElementById('map-container');
+        const resizeHandle = document.getElementById('resize-handle');
+        const kanbanContainer = document.getElementById('kanban-container');
+        let isDragging = false;
+
+        resizeHandle.addEventListener('mousedown', function(e) {
+            isDragging = true;
+            document.body.style.cursor = 'row-resize';
+            e.preventDefault();
+        });
+
+        document.addEventListener('mousemove', function(e) {
+            if (!isDragging) return;
+
+            const containerHeight = window.innerHeight;
+            const y = Math.min(Math.max(200, e.clientY), containerHeight - 200);
+            const mapHeight = y;
+            const kanbanHeight = containerHeight - y - 10; // 10px for resize handle
+
+            mapContainer.style.height = mapHeight + 'px';
+            mapContainer.style.flex = 'none';
+            kanbanContainer.style.height = kanbanHeight + 'px';
+            kanbanContainer.style.flex = 'none';
+
+            // Trigger map resize event to ensure proper rendering
+            map.invalidateSize();
+        });
+
+        document.addEventListener('mouseup', function() {
+            isDragging = false;
+            document.body.style.cursor = '';
+        });
+
+        // Ensure map renders correctly in resized container
+        window.addEventListener('resize', function() {
+            map.invalidateSize();
+        });
+
+        // Listen for messages from the kanban iframe
+        window.addEventListener('message', function(event) {
+            if (event.data.type === 'updateMapPin') {
+                const target = event.data.target;
+                let markerFound = false;
+                
+                // Find and update the marker for this target
+                targetMarkers.getLayers().forEach(marker => {
+                    const popup = marker.getPopup();
+                    if (popup) {
+                        const content = popup.getContent();
+                        // Check if this is the marker for our target
+                        if (content.includes(`<b>${target.organization}</b>`)) {
+                            markerFound = true;
+                            // Update marker color based on new status
+                            const status = target.status;
+                            const currentZoom = map.getZoom();
+                            const size = getMarkerSize(currentZoom);
+                            const faSize = Math.floor(size * 1.5);
+                            
+                            const newIcon = L.divIcon({
+                                className: 'custom-div-icon',
+                                html: `<i class="fas fa-map-marker-alt map-marker" style="color: ${statusColors[status]}; font-size: ${faSize}px;"></i>`,
+                                iconSize: [size, size],
+                                iconAnchor: [size/2, faSize]
+                            });
+                            
+                            marker.setIcon(newIcon);
+                            
+                            // Update popup content
+                            const newPopupContent = `
+                                <b>${target.organization}</b><br>
+                                ${target.address}<br>
+                                Phone: ${target.phone || 'N/A'}<br>
+                                Status: ${status.replace(/\b\w/g, l => l.toUpperCase())}<br>
+                                Population: ${target.population ? target.population.toLocaleString() : 'N/A'}<br>
+                                Income: ${target.median_income ? '$' + target.median_income.toLocaleString() : 'N/A'}
+                            `;
+                            marker.setPopupContent(newPopupContent);
+                            
+                            // Update marker status property
+                            marker.options.status = status;
+                            
+                            // If the marker's status is not in the selected statuses, remove it
+                            const selectedStatuses = Object.keys(statusColors).filter(s => {
+                                const statusId = `status_${s.replace(/ /g, '_')}`;
+                                return document.getElementById(statusId).checked;
+                            });
+                            
+                            if (!selectedStatuses.includes(status)) {
+                                targetMarkers.removeLayer(marker);
+                            }
+                        }
+                    }
+                });
+
+                // If marker wasn't found (might have been filtered out), create a new one
+                if (!markerFound && target.latitude && target.longitude) {
+                    const status = target.status;
+                    const currentZoom = map.getZoom();
+                    const size = getMarkerSize(currentZoom);
+                    const faSize = Math.floor(size * 1.5);
+                    
+                    const marker = L.marker([target.latitude, target.longitude], {
+                        icon: L.divIcon({
+                            className: 'custom-div-icon',
+                            html: `<i class="fas fa-map-marker-alt map-marker" style="color: ${statusColors[status]}; font-size: ${faSize}px;"></i>`,
+                            iconSize: [size, size],
+                            iconAnchor: [size/2, faSize]
+                        }),
+                        status: status
+                    });
+
+                    const popupContent = `
+                        <b>${target.organization}</b><br>
+                        ${target.address}<br>
+                        Phone: ${target.phone || 'N/A'}<br>
+                        Status: ${status.replace(/\b\w/g, l => l.toUpperCase())}<br>
+                        Population: ${target.population ? target.population.toLocaleString() : 'N/A'}<br>
+                        Income: ${target.median_income ? '$' + target.median_income.toLocaleString() : 'N/A'}
+                    `;
+                    
+                    marker.bindPopup(popupContent);
+                    
+                    // Only add the marker if its status is currently selected
+                    const selectedStatuses = Object.keys(statusColors).filter(s => {
+                        const statusId = `status_${s.replace(/ /g, '_')}`;
+                        return document.getElementById(statusId).checked;
+                    });
+                    
+                    if (selectedStatuses.includes(status)) {
+                        targetMarkers.addLayer(marker);
+                    }
+                }
+            }
         });
     </script>
 </body>

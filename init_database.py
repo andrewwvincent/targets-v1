@@ -16,6 +16,7 @@ def init_database():
     # Drop existing tables if they exist
     cursor.execute('DROP TABLE IF EXISTS targets')
     cursor.execute('DROP TABLE IF EXISTS zip_data')
+    cursor.execute('DROP TABLE IF EXISTS activity_log')
     
     # Create targets table
     cursor.execute('''
@@ -32,7 +33,8 @@ def init_database():
         median_income INTEGER,
         latitude REAL,
         longitude REAL,
-        status TEXT DEFAULT 'not contacted'
+        status TEXT DEFAULT 'not contacted',
+        last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
     ''')
     
@@ -55,6 +57,18 @@ def init_database():
         cluster_abc_10mi TEXT,
         cluster_bc_5mi TEXT,
         cluster_bc_10mi TEXT
+    )
+    ''')
+
+    # Create activity_log table
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS activity_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        organization TEXT,
+        old_status TEXT,
+        new_status TEXT,
+        timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (organization) REFERENCES targets(organization)
     )
     ''')
     
