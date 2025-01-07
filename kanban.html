@@ -695,24 +695,150 @@
             }
         }
 
-        function createCardContent(target) {
-            return `
-                <div class="card-title">${target.organization}</div>
-                <div class="card-details">
-                    <div>Address: ${target.address}</div>
-                    <div>Phone: ${target.phone || 'N/A'}</div>
-                    <div>Website: ${target.website || 'N/A'}</div>
-                    <div>Population: ${target.population ? target.population.toLocaleString() : 'N/A'}</div>
-                    <div>Median Income: ${target.median_income ? '$' + target.median_income.toLocaleString() : 'N/A'}</div>
-                </div>
-            `;
+        function attachCardListeners() {
+            document.querySelectorAll('.card').forEach(card => {
+                // Remove existing listener first to prevent duplicates
+                card.removeEventListener('click', toggleCard);
+                // Add click listener
+                card.addEventListener('click', toggleCard);
+            });
         }
 
         function toggleCard(event) {
-            const card = event.currentTarget;
-            card.classList.toggle('expanded');
-            event.stopPropagation();
+            const card = event.target.closest('.card');
+            if (!card) return;
+
+            // If card is highlighted (from search), first remove highlight but keep expanded
+            if (card.classList.contains('highlighted')) {
+                card.classList.remove('highlighted');
+                return;
+            }
+
+            // Normal toggle behavior
+            const details = card.querySelector('.card-details');
+            if (details) {
+                if (details.style.display === '') {
+                    details.style.display = 'block';  // First click should expand
+                } else {
+                    details.style.display = details.style.display === 'none' ? 'block' : 'none';
+                }
+            }
         }
+
+        // Close menus when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!event.target.closest('.sort-button-container')) {
+                document.querySelectorAll('.sort-menu').forEach(menu => {
+                    menu.style.display = 'none';
+                });
+            }
+        });
+
+        function searchCards(searchTerm) {
+            if (!searchTerm) {
+                clearSearch();
+                return;
+            }
+
+            const normalizedSearch = searchTerm.toLowerCase().trim();
+            let matchCount = 0;
+
+            // Get all cards across all columns
+            const cards = document.querySelectorAll('.card');
+            
+            // First, remove all highlights
+            cards.forEach(card => {
+                card.classList.remove('highlighted');
+                const details = card.querySelector('.card-details');
+                if (details) {
+                    details.style.display = 'none';
+                }
+            });
+
+            // Then highlight and move matching cards
+            cards.forEach(card => {
+                const cardText = card.textContent.toLowerCase();
+                if (cardText.includes(normalizedSearch)) {
+                    matchCount++;
+                    
+                    // Highlight and expand the card
+                    card.classList.add('highlighted');
+                    const details = card.querySelector('.card-details');
+                    if (details) {
+                        details.style.display = 'block';
+                    }
+
+                    // Move to top of its column
+                    const column = card.parentElement;
+                    column.insertBefore(card, column.firstChild);
+                }
+            });
+
+            // Update search feedback
+            const searchFeedback = document.getElementById('searchFeedback');
+            searchFeedback.textContent = matchCount > 0 
+                ? `Found ${matchCount} match${matchCount === 1 ? '' : 'es'}`
+                : 'No matches found';
+            searchFeedback.style.display = 'block';
+
+            // Reattach card listeners
+            attachCardListeners();
+        }
+
+        // Clear search
+        function clearSearch() {
+            searchInput.value = '';
+            searchClear.style.display = 'none';
+            document.getElementById('searchFeedback').style.display = 'none';
+            
+            // Reset all cards
+            document.querySelectorAll('.card').forEach(card => {
+                card.classList.remove('highlighted');
+                const details = card.querySelector('.card-details');
+                if (details) {
+                    details.style.display = 'none';
+                }
+            });
+
+            // Reattach card listeners
+            attachCardListeners();
+        }
+
+        // Search input handler
+        const searchInput = document.getElementById('searchInput');
+        const searchClear = document.getElementById('searchClear');
+
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value;
+            searchClear.style.display = searchTerm ? 'block' : 'none';
+            if (!searchTerm) {
+                clearSearch();
+            }
+        });
+
+        searchInput.addEventListener('keyup', (e) => {
+            if (e.key === 'Enter') {
+                searchCards(e.target.value);
+            }
+            if (e.key === 'Escape') {
+                clearSearch();
+            }
+        });
+
+        // Clear search button
+        searchClear.addEventListener('click', clearSearch);
+
+        // Clear highlight when clicking a card
+        document.addEventListener('click', (e) => {
+            const card = e.target.closest('.card');
+            if (card && card.classList.contains('highlighted')) {
+                card.classList.remove('highlighted');
+                const details = card.querySelector('.card-details');
+                if (details) {
+                    details.style.display = 'none';
+                }
+            }
+        });
 
         function toggleSort(button, columnId) {
             // Find the menu next to this button
@@ -828,115 +954,6 @@
             });
         }
 
-        // Close menus when clicking outside
-        document.addEventListener('click', function(event) {
-            if (!event.target.closest('.sort-button-container')) {
-                document.querySelectorAll('.sort-menu').forEach(menu => {
-                    menu.style.display = 'none';
-                });
-            }
-        });
-
-        function searchCards(searchTerm) {
-            if (!searchTerm) {
-                clearSearch();
-                return;
-            }
-
-            const normalizedSearch = searchTerm.toLowerCase().trim();
-            let matchCount = 0;
-
-            // Get all cards across all columns
-            const cards = document.querySelectorAll('.card');
-            
-            // First, remove all highlights
-            cards.forEach(card => {
-                card.classList.remove('highlighted');
-                const details = card.querySelector('.card-details');
-                if (details) {
-                    details.style.display = 'none';
-                }
-            });
-
-            // Then highlight and move matching cards
-            cards.forEach(card => {
-                const cardText = card.textContent.toLowerCase();
-                if (cardText.includes(normalizedSearch)) {
-                    matchCount++;
-                    
-                    // Highlight and expand the card
-                    card.classList.add('highlighted');
-                    const details = card.querySelector('.card-details');
-                    if (details) {
-                        details.style.display = 'block';
-                    }
-
-                    // Move to top of its column
-                    const column = card.parentElement;
-                    column.insertBefore(card, column.firstChild);
-                }
-            });
-
-            // Update search feedback
-            const searchFeedback = document.getElementById('searchFeedback');
-            searchFeedback.textContent = matchCount > 0 
-                ? `Found ${matchCount} match${matchCount === 1 ? '' : 'es'}`
-                : 'No matches found';
-            searchFeedback.style.display = 'block';
-        }
-
-        // Clear search
-        function clearSearch() {
-            searchInput.value = '';
-            searchClear.style.display = 'none';
-            document.getElementById('searchFeedback').style.display = 'none';
-            
-            // Reset all cards
-            document.querySelectorAll('.card').forEach(card => {
-                card.classList.remove('highlighted');
-                const details = card.querySelector('.card-details');
-                if (details) {
-                    details.style.display = 'none';
-                }
-            });
-        }
-
-        // Search input handler
-        const searchInput = document.getElementById('searchInput');
-        const searchClear = document.getElementById('searchClear');
-
-        searchInput.addEventListener('input', (e) => {
-            const searchTerm = e.target.value;
-            searchClear.style.display = searchTerm ? 'block' : 'none';
-            if (!searchTerm) {
-                clearSearch();
-            }
-        });
-
-        searchInput.addEventListener('keyup', (e) => {
-            if (e.key === 'Enter') {
-                searchCards(e.target.value);
-            }
-            if (e.key === 'Escape') {
-                clearSearch();
-            }
-        });
-
-        // Clear search button
-        searchClear.addEventListener('click', clearSearch);
-
-        // Clear highlight when clicking a card
-        document.addEventListener('click', (e) => {
-            const card = e.target.closest('.card');
-            if (card && card.classList.contains('highlighted')) {
-                card.classList.remove('highlighted');
-                const details = card.querySelector('.card-details');
-                if (details) {
-                    details.style.display = 'none';
-                }
-            }
-        });
-
         function onload() {
             fetch('/api/kanban_data')
                 .then(response => response.json())
@@ -972,7 +989,6 @@
                                     card.draggable = true;
                                     card.ondragstart = drag;
                                     card.ondragend = dragend;
-                                    card.onclick = toggleCard;
                                     card.dataset.target = JSON.stringify(target);
                                     card.id = 'card-' + target.organization.replace(/[^a-zA-Z0-9]/g, '-');
                                     card.innerHTML = createCardContent(target);
@@ -984,6 +1000,7 @@
 
                     updateColumnCounts();
                     document.querySelectorAll('.column').forEach(createDropTargets);
+                    attachCardListeners();
                 })
                 .catch(error => console.error('Error loading data:', error));
         }
@@ -1017,6 +1034,19 @@
                 target.className = 'card-drop-target';
                 card.parentNode.insertBefore(target, card.nextSibling);
             });
+        }
+
+        function createCardContent(target) {
+            return `
+                <div class="card-title">${target.organization}</div>
+                <div class="card-details">
+                    <div>Address: ${target.address}</div>
+                    <div>Phone: ${target.phone || 'N/A'}</div>
+                    <div>Website: ${target.website || 'N/A'}</div>
+                    <div>Population: ${target.population ? target.population.toLocaleString() : 'N/A'}</div>
+                    <div>Median Income: ${target.median_income ? '$' + target.median_income.toLocaleString() : 'N/A'}</div>
+                </div>
+            `;
         }
 
         function createPlaceholder() {
